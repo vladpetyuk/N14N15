@@ -8,7 +8,6 @@ import(MassSpecWavelet)
 import(Rdisop)
 import(MASS)
 import(plyr)
-import(multicore)
 
 
 #exportPattern("^[[:alpha:]]+")
