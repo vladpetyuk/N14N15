@@ -1,11 +1,13 @@
-require("mzR")
-require("mzID")
+# require("mzR")
+# require("mzID")
 
 
+# the whole "PeptideID" class may disappear and replaced by mzID
+# to extract whatever necessary I'd rather use methods
 setClass(Class="PeptideID",
-         representation(datasetName="character",
+         representation( #datasetName="character",
                         peptide.identification.fdr="numeric",
-                        number.peptide.ids="numeric",
+                        number.unique.peptides="numeric",
                         peptides="data.frame",
                         peptide.to.protein.map="data.frame"),
          prototype())
@@ -13,10 +15,10 @@ setClass(Class="PeptideID",
 
 setClass(Class="PeptideFit",
          representation(peptideSequence='character',
-                        ms2scan='numeric',                        
+                        ms2Scan='numeric',                        
                         experimentalMassToCharge='numeric',
                         charge='numeric',
-                        mzrObj='mzRramp',
+                        mzRObj='mzRramp',
                         #--- secondary
                         elementalCompVec='numeric',
                         elementalCompStr='character',
@@ -46,18 +48,13 @@ setClass(Class="PeptideFit",
 
 
 setClass(Class="N14N15",
-         representation(#PROTON_MASS="numeric",
+         representation(
             datasetName="character",
-            mzrObj="mzRramp",
-#             pathToMSGF="character",
-            workingDir="character", # TO DROP
-#             fastaFile="character",
+            workingDir="character",
+            mzRObj="mzRramp",
             peptideIDs="PeptideID",
-            peptideFits="list")
-         #          , prototype(PROTON_MASS=as.double(1.007276))
+            peptideFits="list")  
 )
 
 
 
-# xxx <- setClass(Class="XXX",
-#          representation(x='numeric'))

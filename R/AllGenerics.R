@@ -1,3 +1,11 @@
+
+# # generic for constructor of N14N15 class
+# # I wonder if this should not be as fancy as generic, 
+# # but rather a regular function
+# setGeneric("N14N15", 
+#            function(x, y, ...) standardGeneric("N14N15"))
+
+
 setGeneric("generateEIC", 
            function(.Object, ...) standardGeneric("generateEIC"))
 
@@ -36,11 +44,8 @@ setGeneric("getMassErrorPPM",
 
 setGeneric("plot3D", function(.Object, ...) standardGeneric("plot3D"))
 
-setGeneric("visualize", 
-           function(.Object, ...) standardGeneric("visualize"))
-
-setGeneric("summary", 
-           function(.Object, ...) standardGeneric("summary"))
+setGeneric("reportToPNG", 
+           function(.Object, ...) standardGeneric("reportToPNG"))
 
 setGeneric("fitN14N15", 
            function(.Object, index, ...) standardGeneric("fitN14N15"))
@@ -48,11 +53,13 @@ setGeneric("fitN14N15",
 setGeneric("reportToTXT", 
            function(.Object, ...) standardGeneric("reportToTXT"))
 
+setGeneric("summary", 
+           function(.Object, ...) standardGeneric("summary"))
 
 
-#---- hacks ----
-setGeneric("getPath", 
-           function(.Object) standardGeneric("getPath"))
-
-setGeneric("getVersion", 
-           function(.Object) standardGeneric("getVersion"))
+# #---- hacks ----
+# setGeneric("getPath", 
+#            function(.Object) standardGeneric("getPath"))
+# 
+# setGeneric("getVersion", 
+#            function(.Object) standardGeneric("getVersion"))

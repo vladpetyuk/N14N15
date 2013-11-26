@@ -1,0 +1,17 @@
+
+
+1) Calculate ratios based on peptide/charge combinations, but not individual peptide-to-spectrum matched. That is multiple entries of the same peptide/charge combo (due to multiple MS/MS spectra) should be reduced to one.
+
+
+3) figure out reportToTXT 
+Does .Object@peptideIDs@peptide.to.protein.map has gene name redundancy?
+I think it should contain redundancy.
+
+3a) ***NOW*** Tweak the output. Make sure there are tables at 
+   -) peptide level
+   -) protein level. all peptides
+   -) protein level. unique peptides
+-- need to figure out decent filters first
+
+4) HARD. parallelize quantify
+

@@ -6,15 +6,15 @@ setMethod("initialize",
                               peptideSequence, 
                               experimentalMassToCharge,
                               charge,
-                              ms2scan,
-                              mzrObj)
+                              ms2Scan,
+                              mzRObj)
           {
              #
              .Object@peptideSequence <- peptideSequence
              .Object@experimentalMassToCharge <- experimentalMassToCharge
              .Object@charge <- charge
-             .Object@ms2scan <- ms2scan
-             .Object@mzrObj <- mzrObj
+             .Object@ms2Scan <- ms2Scan
+             .Object@mzRObj <- mzRObj
              .Object@elementalCompVec <- 
                 seq.to.elements.X(peptideSequence, IAA=TRUE)
              .Object@elementalCompStr <- paste(names(.Object@elementalCompVec),
@@ -39,6 +39,21 @@ setMethod("initialize",
              centroids <- centroiding( .Object@summedMS1spectrum, 
                                        ppm.tol=25, 
                                        mad.threshold=4)
+             
+             # need a more elegant handling of failed to quantify peptides
+             if(is.null(centroids)){
+                .Object@isotopic.intensity <- 0
+                .Object@massErrorPPM <- 0
+                .Object@r2.N15 <- 0
+                .Object@r2.N14 <- 0
+                .Object@theor.intensities <- 0
+                .Object@theor.mz <- 0
+                .Object@molecular.proportion.heavy <- 0
+                .Object@atomic.proportion.heavy <- 0
+                .Object@centroid.peak.mz <- 0
+                .Object@centroid.peak.intensities <- 0
+                return(.Object)
+             }
              # 3. initialize elements with X
              elements <- initialize.elements.X()
              # 4. get matching indices
@@ -143,8 +158,8 @@ setMethod("initialize",
 setMethod("generateEIC", "PeptideFit",
           definition=function(.Object)
           {
-             ms1.header <- subset(header(.Object@mzrObj), msLevel == 1)
-             i0 <- which.min(abs(ms1.header$seqNum - .Object@ms2scan))
+             ms1.header <- subset(header(.Object@mzRObj), msLevel == 1)
+             i0 <- which.min(abs(ms1.header$seqNum - median(.Object@ms2Scan)))
              tol.mz <- .Object@experimentalMassToCharge * 
                 .Object@peakMatchingTolPPM / 1e6
              scans <- numeric()
@@ -155,7 +170,7 @@ setMethod("generateEIC", "PeptideFit",
              i00 <- i00[ i00 < nrow(ms1.header)]
              for(ii in i00){
                 scan.i <- ms1.header[ii,'seqNum']
-                pp <- peaks(.Object@mzrObj, scan.i)
+                pp <- peaks(.Object@mzRObj, scan.i)
                 pp <- pp[pp[,1] > .Object@experimentalMassToCharge - tol.mz & 
                       pp[,1] < (.Object@experimentalMassToCharge + tol.mz),
                          ,drop=FALSE]
@@ -214,18 +229,32 @@ setMethod("findChromPeakCWT", "PeptideFit",
                                           peakScale >= (FWHM*0.67)
                                        ])
              # in case there are no good peaks, do not apply SNR threshold
-             if(is.na(selPeakIndices))
+             # if(is.na(selPeakIndices)[1])
+             if(identical(selPeakIndices, NA) || length(selPeakIndices) == 0)
                 selPeakIndices <- with(majorPeakInfo, 
                                        allPeakIndex[
                                              peakScale >= (FWHM*0.67)
                                           ])
-             # if multiple peaks, choose one,
-             # right now it is the closest to ms2scan
+             
+             # if still nothing let's deal with it
+             if(length(selPeakIndices) == 0){
+                i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
+                .Object@centerMS1 <- .Object@eic[i,1]
+                .Object@FWHM.MS1 <- FWHM
+                .Object@lowMS1 <- .Object@eic[i-FWHM,1]
+                .Object@highMS1 <- .Object@eic[i+FWHM,1]
+                .Object@chromPeakSNR <- 0
+                return(.Object)
+             }
+             
+             # if multiple peaks, use one,
+             # right now it is the closest to ms2Scan
              i <- 1
              if(length(selPeakIndices) > 1){
                 i <- which.min(abs(.Object@eic[selPeakIndices,1] - 
-                                      .Object@ms2scan))
+                                      median(.Object@ms2Scan)))
              }
+             
              selPeakIndices <- selPeakIndices[i]
              idx <- which(selPeakIndices == majorPeakInfo$allPeakIndex)
              best.scale <- majorPeakInfo$peakScale[idx]
@@ -246,7 +275,7 @@ setMethod("findChromPeakCWT", "PeptideFit",
 setMethod("generateSummedSpectrum", "PeptideFit",
           definition=function(.Object, padDa=10)
           {
-             pl <- peaks(.Object@mzrObj, .Object@centerMS1)
+             pl <- peaks(.Object@mzRObj, .Object@centerMS1)
              distance <- .Object@elementalCompVec['X']/.Object@charge
              padTh <- padDa/.Object@charge
              pl <- pl[(pl[,1] > .Object@experimentalMassToCharge-padTh) & 
@@ -260,7 +289,7 @@ setMethod("generateSummedSpectrum", "PeptideFit",
              mat.resampled <- matrix(nrow=length(xout), 
                                      ncol=length(.Object@FWHM.MS1))
              for(i in 1:length(.Object@FWHM.MS1)){
-                pl <- peaks(.Object@mzrObj, .Object@FWHM.MS1[i])
+                pl <- peaks(.Object@mzRObj, .Object@FWHM.MS1[i])
                 pl <- pl[(pl[,1] >= mz.min) & (pl[,1] <= mz.max),]
                 pl.resampled <- approx(pl[,1], pl[,2], xout=xout)
                 mat.resampled[,i] <- pl.resampled$y
@@ -299,6 +328,10 @@ setMethod("r2.N15", "PeptideFit",
           definition=function(.Object)
           {
              ii <- 1:.Object@maxisotopes
+             # in case there are all zero intensities
+             if(all(.Object@centroid.peak.intensities[-ii] == 0))
+                return(0)
+             # keep going if signal is not completely zeros
              cor.val <- cor(.Object@centroid.peak.intensities[-ii],
                             .Object@theor.intensities[-ii])
              return(cor.val^2)
@@ -309,8 +342,13 @@ setMethod("r2.N15", "PeptideFit",
 setMethod("show", "PeptideFit",
           definition=function(object)
           {
-             cat("fit for peptide", object@peptideSequence, "\n")
-             cat("MS2 scan", object@ms2scan, "\n")
+             cat("fit for peptide ", 
+                 object@peptideSequence, 
+                 ", charge ",
+                 object@charge,
+                 "+", "\n", sep='')
+             # cat("MS2 scan(s):", object@ms2Scan, "\n")
+             cat("MS2 scan(s):", paste(object@ms2Scan, collapse=', '), "\n")
              cat("N15 atomic inclusion", object@atomic.proportion.heavy, '\n')
              cat("N15 molecular inclusion", 
                  object@molecular.proportion.heavy, '\n')
@@ -327,12 +365,12 @@ setMethod("plotEIC", "PeptideFit",
                     col='green1', lty=2, lwd=2)
              # points(.Object@eic.smoothed, type='b', col='blue')
              abline(v=.Object@centerMS1, col='green1', lwd=2)
-             abline(v=.Object@ms2scan, col='red', lwd=2)
+             abline(v=.Object@ms2Scan, col='red', lwd=2)
              titleString <- sprintf(
                 '%s  z:%s  MS2:%s\nchromPeakSNR: %.1f',
                 .Object@peptideSequence,
                 .Object@charge,
-                .Object@ms2scan,
+                sprintf("(%s)",paste(.Object@ms2Scan, collapse=', ')),
                 .Object@chromPeakSNR)
              title(titleString, cex.main=0.75, adj=0)
           }
@@ -356,7 +394,8 @@ setMethod("plotIsoFit", "PeptideFit",
  '%s  z:%s  MS2:%s\natomic: %.2f\nmolecular: %.2f\nR2.N14: %.2f\nR2.N15: %.2f',
                                     .Object@peptideSequence,
                                     .Object@charge,
-                                    .Object@ms2scan,
+                                    #.Object@ms2Scan,
+                     sprintf("(%s)",paste(.Object@ms2Scan, collapse=', ')),
                                     .Object@atomic.proportion.heavy,
                                     .Object@molecular.proportion.heavy,
                                     .Object@r2.N14,
@@ -408,23 +447,26 @@ setMethod("plot3D", "PeptideFit",
              mz.pad = 0.25
              scan.pad = 0 # 0.25
              mzs <- range(.Object@summedMS1spectrum[,1])
-             ms1 <- subset(header(.Object@mzrObj), msLevel == 1, 
+             ms1 <- subset(header(.Object@mzRObj), msLevel == 1, 
                            select=c(seqNum))[,1]
              center.idx <- which(.Object@centerMS1 == ms1)
              if(is.null(window))
                 window <- .Object@scanConsiderationRange
 #              scans <- ms1[(center.idx-window):(center.idx+window)]
              #
-             i0 <- which.min(abs(ms1 - .Object@ms2scan))
+             i0 <- which.min(abs(ms1 - median(.Object@ms2Scan)))
              i00 <- i0 + (round(-.Object@scanConsiderationRange*(1+scan.pad))):
                          (round(+.Object@scanConsiderationRange*(1+scan.pad)))
              i00 <- i00[ i00 > 0]
              i00 <- i00[ i00 < length(ms1)]
              scans <- ms1[i00]
              resMz = 0.1
-             im <- get3Dmap( .Object@mzrObj, scans, 
+             
+             # get3Dmap prints 1. Should be silences somehow.
+             im <- get3Dmap( .Object@mzRObj, scans, 
                              min(mzs)-diff(mzs)*mz.pad, 
                              max(mzs)+diff(mzs)*mz.pad, resMz=resMz)
+             
              op <- par(mar=c(5,4,4,6))
 #              col <- colorRampPalette(brewer.pal(9,"Blues"))(256)
 #              col <- rev(colorRampPalette(brewer.pal(9,"Greys"))(256))
@@ -454,11 +496,12 @@ setMethod("plot3D", "PeptideFit",
              closest.to.mz <- 
                 (.Object@experimentalMassToCharge-(min(mzs)-diff(mzs)*mz.pad))/
                      ((1+2*mz.pad)*diff(range(mzs)))
-             closest.to.ms2scan <- 
-                (.Object@ms2scan-min(scans))/
+             closest.to.ms2Scan <- 
+                (.Object@ms2Scan-min(scans))/
                   diff(range(scans))
-             points( closest.to.ms2scan,
-                     closest.to.mz, col='red', pch=4)
+             points( closest.to.ms2Scan,
+                     rep(closest.to.mz, length(closest.to.ms2Scan)), 
+                     col='red', pch=4)
              #
              # plot box for summed spectrum
              mz.range <- range(.Object@summedMS1spectrum[,1])
@@ -483,13 +526,12 @@ setMethod("plot3D", "PeptideFit",
 )
 
 
-setMethod("visualize", "PeptideFit",
-          definition=function(.Object, toPNG=TRUE)
+setMethod("reportToPNG", "PeptideFit",
+          definition=function(.Object)
           {
-             filename <- sprintf("%s_z%s_scan%s.png",
+             filename <- sprintf("%s_z%s.png",
                                     .Object@peptideSequence,
-                                    .Object@charge,
-                                    .Object@ms2scan)
+                                    .Object@charge)
              png(filename, res=200, width = 2000, height = 2000, units="px")
              op <- par(mfcol=c(2,2))
              plotIsoFit(.Object)
@@ -506,7 +548,7 @@ setMethod("summary", "PeptideFit",
           {
              to.extract <- c("peptideSequence",
                              "charge",
-                             "ms2scan",
+                             "ms2Scan",
                              "molecular.proportion.heavy",
                              "atomic.proportion.heavy",
                              "r2.N14",
@@ -518,6 +560,7 @@ setMethod("summary", "PeptideFit",
              for( e in to.extract){
                 out[[e]] <- slot(.Object, e)
              }
+             out <- lapply(out, paste, collapse=', ')
              df <- as.data.frame(out)
              rownames(df) <- NULL
              return(df)
@@ -618,6 +661,8 @@ centroiding <- function( spectrum, ppm.tol=25, mad.threshold=4)
    spectrum <- subset( spectrum, spectrum[,2] > 0) # no zero intensity values
    threshold = median(spectrum[,2])+mad.threshold*mad(spectrum[,2])
    spectrum <- subset( spectrum, spectrum[,2] > threshold)
+   if(nrow(spectrum) == 0)
+      return(NULL)
    
    # This is fixed Th tolerance for now. Should be changed to ppm later.
    mz.tol <- (ppm.tol/1e6)*mean(spectrum[,"mz"])

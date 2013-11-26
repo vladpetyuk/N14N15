@@ -3,39 +3,33 @@
 setMethod("initialize", 
           signature(.Object="PeptideID"), 
           definition=function(.Object, 
-                              datasetName, 
-                              workingDir,
-                              filterString) 
+                              mzIdentMLName,
+                              filterString)  #"`MS-GF:SpecEValue` < 10^-10"
           {
              #
-             output.file <- sprintf("%s.mzid", datasetName)
-             output.path <- file.path(workingDir, output.file)
-             #.. this is a hack about getPath and getVersion
-             #.. and should be removed later
-#              setGeneric("getPath", 
-#                         function(.Object) standardGeneric("getPath"))
-#              setMethod("getPath",signature("character"),
-#                        definition=function(.Object) return("/x:MzIdentML"))
-#              setGeneric("getVersion", 
-#                         function(.Object) standardGeneric("getVersion"))
-#              setMethod("getVersion",signature("character"),
-#                        definition=function(.Object) return("1.1"))
-             obj <- mzID( output.path)
+#              output.file <- sprintf("%s.mzid", datasetName)
+#              output.path <- file.path(workingDir, output.file)
+             obj <- mzID( mzIdentMLName)
              #
              #.. extract the right results
-             obj.flat <- flatten2(obj)
-             obj.flat.filt <- subset( obj.flat, eval(parse(text=filterString)))
+#              obj.flat <- flatten(obj, no.redundancy=FALSE) # from mzID package
+             obj.flat <- flatten2(obj) # my hack
+             obj.flat.filt <- subset( obj.flat, 
+                                      eval(parse(text=filterString)))
+             #.. insert a check point to make sure there are identifications
+             stopifnot(nrow(obj.flat.filt) > 0)
+             # 
              peptide.isDecoy <- unique(subset(obj.flat.filt, 
                                               select=c('pepSeq','isDecoy')))
              peptide.identification.fdr <- 
-                sum(peptide.isDecoy$isDecoy)/
-                nrow(peptide.isDecoy)
-             number.peptide.ids <- sum(!peptide.isDecoy$isDecoy)
+                sum(peptide.isDecoy$isDecoy)/sum(!peptide.isDecoy$isDecoy)
+             number.unique.peptides <- sum(!peptide.isDecoy$isDecoy)
              
-             obj.flat.filt <- subset(obj.flat.filt, isDecoy == FALSE)
+             obj.flat.filt <- subset(obj.flat.filt, !isDecoy)
              obj.flat.filt$scan <- as.numeric(sapply(
                 strsplit(obj.flat.filt$spectrumID,'='),'[[',2))
              
+             # selecting only what matters for peptides
              peptides <- subset(obj.flat.filt,
                                 select=c(scan,
                                          experimentalMassToCharge,
@@ -46,6 +40,17 @@ setMethod("initialize",
                                          `MS-GF:SpecEValue`))
              peptides <- unique(peptides)
              
+             # Note, redundancy of multiple peptide observations
+             # should be removed. PSMs should be grouped down to 
+             # Peptide/mod/charge combos.
+             peptides <- ddply(peptides, 
+                        .(chargeState, pepSeq, modification), 
+                        summarize,
+                  ms2Scan = list(scan),
+                  experimentalMassToCharge = mean(experimentalMassToCharge),
+                  calculatedMassToCharge = unique(calculatedMassToCharge))
+
+             
              peptide.to.protein.map <- with( obj.flat.filt, 
                                                data.frame( pepSeq,
                                                            accession,
@@ -53,9 +58,9 @@ setMethod("initialize",
              peptide.to.protein.map <- unique(peptide.to.protein.map)
              #
              #.. form are return the object
-             .Object@datasetName <- datasetName
+#              .Object@datasetName <- datasetName
              .Object@peptide.identification.fdr <- peptide.identification.fdr
-             .Object@number.peptide.ids <- number.peptide.ids
+             .Object@number.unique.peptides <- number.unique.peptides
              .Object@peptides <- peptides
              .Object@peptide.to.protein.map <- peptide.to.protein.map
              return(.Object)

@@ -3,19 +3,25 @@
 #importFrom(mzID)
 
 import(mzR)
-import(mzID)
+import(mzID) #there are some issues with docName function
 import(MassSpecWavelet)
 import(Rdisop)
 import(MASS)
+import(plyr)
+import(multicore)
 
 
 #exportPattern("^[[:alpha:]]+")
-export(N14N15)
-#export(getPath)
-#export(getVersion)
+export(N14N15) # constructor
+#exportClasses(N14N15)
 export(fitN14N15)
 export(plotEIC)
 export(plotIsoFit)
 export(plot3D)
+
+# new edits
+export(quantify)
+export(reportToPNG)
+export(reportToTXT)
 
 

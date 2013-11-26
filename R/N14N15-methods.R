@@ -1,115 +1,150 @@
-# require(methods)
-
-setGeneric("N14N15", function(x, y, ...) standardGeneric("N14N15"))
-
-setMethod("N14N15", signature = c("character", "character"), 
-          function(x, y, ...) {
-             x <- openMSdata(x)
-             y <- mzID(y)
-             n14n15(x, y, ...)
-          })
-
-setMethod("N14N15", signature = c("mzRramp", "mzID"), 
-          function(x, y, ...)  n14n15(x, y, ...))
-
-setMethod("N14N15", signature = c("mzRramp", "character"), 
-          function(x, y, ...) {
-             y <- mzID(y)
-             n14n15(x, y, ...)
-          })
-
-setMethod("N14N15", signature = c("character", "mzID"), 
-          function(x, y, ...) {
-             x <- openMSfile(x)
-             n14n15(x, y, ...)
-          })
 
 
-n14n15 <- function(x, y, ...) {
-   .Object <- new("N14N14")
-   .Object@mzrObj <- x
-   .Object@peptideIDs <- y
-   .Object@datasetName <- fileName(x)
-   .Object@workingDir <- dirname(.Object@datasetName)
+
+#---- Constructors --------------------------------------------------
+
+# # in this "constructor" method is takes paths to mzXML and mzIdentML
+# setMethod("N14N15", signature = c("character", "character"), 
+#           definition=function(x, y, ...) {
+#              mzXMLName <- x
+#              if(missing(y))
+#                 y <- gsub("\\.mzXML","\\.mzid",mzXMLName)
+#              mzIdentMLName <- y
+#              mzRObj <- openMSfile(mzXMLName) # or openMSfile
+#              mzIDObj <- mzID(mzIdentMLName)
+#              return(n14n15(mzRObj, mzIDObj, ...))
+#           })
+
+# setMethod("N14N15", signature = c("mzRramp", "mzID"), 
+#           definition=function(x, y, ...) { 
+#              return(n14n15(x, y, ...))
+#           })
+# 
+# setMethod("N14N15", signature = c("mzRramp", "character"), 
+#           definition=function(x, y, ...) {
+#              y <- mzID(y)
+#              return(n14n15(x, y, ...))
+#           })
+# 
+# setMethod("N14N15", signature = c("character", "mzID"), 
+#           definition=function(x, y, ...) {
+#              x <- openMSfile(x)
+#              return(n14n15(x, y, ...))
+#           })
+
+
+N14N15 <- function(mzXMLName, mzIdentMLName, filterString, ...) {
+   
+   .Object <- new("N14N15")
+   #-----------------------
+   # Note! No path checking yet.
+   # work out paths
+   .Object@workingDir <- dirname(mzXMLName)
+   .Object@datasetName <- sub("\\.mzXML","",basename(mzXMLName))
+   #-----------------------
+   .Object@mzRObj <- openMSfile(mzXMLName) #
+   if(missing(mzIdentMLName))
+      mzIdentMLName <- gsub("\\.mzXML","\\.mzid",mzXMLName)
+#    mzIDObj <- mzID(mzIdentMLName)
+#    .Object@mzIDObj <- mzIDObj
+   #------------------------
+   .Object@peptideIDs <- new("PeptideID", 
+                             mzIdentMLName,
+                             filterString)
+   #------------------------
+   # !!! quantitative processing should be deferred to quantify method
    #-----------------------------------
 #    total <- nrow(.Object@peptideIDs@peptides)
 #    for( i in 1:total){
 #       .Object@peptideFits[[i]] <- fitN14N15(.Object, i)
 #       if(i %% 10 == 0){
-#          print(sprintf("done %s PSMs out of %s", i, total))
+#          print(sprintf("done %s peptide/charges out of %s", i, total))
 #       }
 #    }
    #-----------------------------------
    return(.Object)
 }
+#--------------------------------------------------------------------
+
 
 setMethod("quantify", "N14N15", 
           function(object, k,  ... ) {
              if (missing(k))
-                k = 1:n
+                k = seq_len(nrow(x@peptideIDs@peptides))
              # ins
              # fill the appropriate slots of N14N15 object
              # and return the entire object
              ans = vector("list", length = length(k))
              names(ans) = k
-             # filling ans with ans <- lapply(seq_along(k), 
-             #                         function(x, i) filtN14N15(.Object, k[i]))
-             .Object@peptideFit <- and
-             return(.Object)
+
+             # filling ans with 
+             # library("multicore")
+             # this works only on Linux/MacOSX
+             # Actully the problem may be concurrent access to mzXML file
+#              ans <- mclapply(seq_along(k), 
+#                            function(i) {fitN14N15(object, k[i])},
+#                            mc.cores=8)
+             # non-parallel version
+             ans <- lapply(seq_along(k), 
+                           function(i) fitN14N15(object, k[i]))
+             
+             object@peptideFits <- ans
+             return(object)
           })
 
 
-setMethod("initialize", 
-          signature(.Object="N14N15"), 
-          definition=function(.Object, pathToMzXML, filterString) 
-          {
-             print("Initializing new N14N15 object...")
-             .Object@datasetName <- 
-                strsplit(basename(pathToMzXML),'\\.')[[1]][1]
-             .Object@workingDir <- 
-                dirname(pathToMzXML)
-             #
-             .Object@mzrObj <- openMSfile(pathToMzXML)
-             #
-             .Object@peptideIDs <- new("PeptideID", 
-                                       .Object@datasetName,
-                                       .Object@workingDir,
-                                       filterString)
-             #
-             total <- nrow(.Object@peptideIDs@peptides)
-             for( i in 1:total){
-                .Object@peptideFits[[i]] <- fitN14N15(.Object, i)
-                if(i %% 10 == 0){
-                   print(sprintf("done %s PSMs out of %s", i, total))
-                }
-             }
-             #
-             return(.Object)
-          }
-)
+# setMethod("initialize", 
+#           signature(.Object="N14N15"), 
+#           definition=function(.Object, pathToMzXML, filterString) 
+#           {
+#              print("Initializing new N14N15 object...")
+#              .Object@datasetName <- 
+#                 strsplit(basename(pathToMzXML),'\\.')[[1]][1]
+#              .Object@workingDir <- 
+#                 dirname(pathToMzXML)
+#              #
+#              .Object@mzrObj <- openMSfile(pathToMzXML)
+#              #
+#              .Object@peptideIDs <- new("PeptideID", 
+#                                        .Object@datasetName,
+#                                        .Object@workingDir,
+#                                        filterString)
+#              #
+#              total <- nrow(.Object@peptideIDs@peptides)
+#              for( i in 1:total){
+#                 .Object@peptideFits[[i]] <- fitN14N15(.Object, i)
+#                 if(i %% 10 == 0){
+#                    print(sprintf("done %s PSMs out of %s", i, total))
+#                 }
+#              }
+#              #
+#              return(.Object)
+#           }
+# )
 
 
 setMethod("fitN14N15",
           signature('N14N15','numeric'),
           definition=function(.Object, index)
-          {
-             fitObj <- new("PeptideFit",
-                           peptideSequence=
-                              .Object@peptideIDs@peptides[index,'pepSeq'],
-                           experimentalMassToCharge=
-                              .Object@peptideIDs@peptides[index,
-                                 'experimentalMassToCharge'],
-                           charge=.Object@peptideIDs@peptides[index,
-                                 'chargeState'],
-                           ms2scan=.Object@peptideIDs@peptides[index,'scan'],
-                           mzrObj=.Object@mzrObj)
-             return(fitObj)
-          }
+   {
+      fitObj <- new("PeptideFit",
+                  peptideSequence=
+                     .Object@peptideIDs@peptides[index,'pepSeq'],
+                  experimentalMassToCharge=
+                     .Object@peptideIDs@peptides[index,
+                        'experimentalMassToCharge'],
+                  charge=.Object@peptideIDs@peptides[index,
+                        'chargeState'],
+                  ms2Scan=.Object@peptideIDs@peptides[index,
+                        'ms2Scan'][[1]],
+                  mzRObj=.Object@mzRObj)
+      return(fitObj)
+   }
 )
 
 
 
-setMethod("visualize", 
+setMethod("reportToPNG", 
           signature(.Object="N14N15"), 
           definition=function(.Object) 
           {
@@ -123,7 +158,7 @@ setMethod("visualize",
                 invisible(file.remove(list.files()))
              }
              for( i in 1:length(.Object@peptideFits)){
-                visualize(.Object@peptideFits[[i]])
+                reportToPNG(.Object@peptideFits[[i]])
              }
              setwd(.Object@workingDir)
           }
@@ -159,13 +194,29 @@ setMethod("reportToTXT", "N14N15",
                 out.df <- rbind( out.df,
                                  summary(.Object@peptideFits[[i]]))
              }
-             write.table( out.df, 
-                          file=sprintf("%s_N14N15fits.txt", .Object@datasetName), 
-                          sep='\t', quote=FALSE, row.names=FALSE)
-             write.table( .Object@peptideIDs@peptides, 
-                          file=sprintf("%s_peptideIDs.txt",
+             #-- peptide level fits
+             write.table( out.df,
+                          file=sprintf("%s_PeptideFits.txt", 
                                        .Object@datasetName),
                           sep='\t', quote=FALSE, row.names=FALSE)
+                          
+#              #-- protein fits
+#              write.table( out.df,
+#                           file=sprintf("%s_ProteinAvgFits_AllPeptides.txt", 
+#                                        .Object@datasetName),
+#                           sep='\t', quote=FALSE, row.names=FALSE)
+#              
+#              #-- protein fits. only unique peptides
+#              write.table( out.df,
+#                           file=sprintf("%s_ProteinAvgFits_UniquePeptides.txt", 
+#                                        .Object@datasetName),
+#                           sep='\t', quote=FALSE, row.names=FALSE)
+             
+#              write.table( .Object@peptideIDs@peptides, 
+#                           file=sprintf("%s_peptideIDs.txt",
+#                                        .Object@datasetName),
+#                           sep='\t', quote=FALSE, row.names=FALSE)
+             
              write.table( .Object@peptideIDs@peptide.to.protein.map, 
                           file=sprintf("%s_peptideProteinMap.txt", 
                                        .Object@datasetName), 
@@ -180,29 +231,33 @@ setMethod("show", "N14N15",
           {
              cat("dataset", object@datasetName, "\n")
              cat(nrow(object@peptideIDs@peptides), 
-                 "peptide to spectrum matches", "\n")
-             mean.N15 <- mean(sapply(object@peptideFits, slot,
-                                     'atomic.proportion.heavy'), 
-                              na.rm=TRUE)
-             cat("average atomic incorporation", 
+                 "peptide/charge combinations", "\n")
+             mean.N15 <- ifelse(length(object@peptideFits) == 0, 
+                                NA,
+                                mean(sapply(object@peptideFits, slot,
+                                            'atomic.proportion.heavy'), 
+                                     na.rm=TRUE))
+             cat("average atomic incorporation:", 
                  signif(mean.N15,2), '\n')
-             mean.N15 <- mean(sapply(object@peptideFits, slot,
-                                     'molecular.proportion.heavy'), 
-                              na.rm=TRUE)
-             cat("average molecular incorporation", 
+             mean.N15 <- ifelse(length(object@peptideFits) == 0, 
+                                NA,
+                                mean(sapply(object@peptideFits, slot,
+                                            'molecular.proportion.heavy'), 
+                                     na.rm=TRUE))
+             cat("average molecular incorporation:", 
                  signif(mean.N15,2), '\n')
           }
 )
 
 
-
+# S4 way
 setAs("N14N15", "MSnSet",
       function (from){
          .Object <- from
          proportions <- sapply(.Object@peptideFits, slot, 
                                "molecular.proportion.heavy")
          pepSeq <- .Object@peptideIDs@peptides$pepSeq
-         x@peptideFits[[1]]@isotopic.intensity
+         .Object@peptideFits[[1]]@isotopic.intensity
          isotopic.intensities <- sapply(.Object@peptideFits, slot,
                                         "isotopic.intensity")
          .exprs <- cbind(isotopic.intensities*(1-proportions),
@@ -220,8 +275,10 @@ setAs("N14N15", "MSnSet",
 #                        annotation = "No annotation")
 #          msnset <- new("MSnSet", 
 #                        exprs = .exprs, 
-#                        phenoData = new("AnnotatedDataFrame",data=.phenoData), 
-#                        featureData = new("AnnotatedDataFrame",data=.featureData))
+#                        phenoData = new("AnnotatedDataFrame",
+#                                         data=.phenoData), 
+#                        featureData = new("AnnotatedDataFrame",
+#                                           data=.featureData))
          msnset <- MSnSet(.exprs,
                           .featureData,
                           .phenoData)
@@ -232,7 +289,7 @@ setAs("N14N15", "MSnSet",
 )
 
 
-
+# S3 way
 as.MSnSet.N14N14 <- function(.Object)
 {
    as(.Object,"MSnSet")
