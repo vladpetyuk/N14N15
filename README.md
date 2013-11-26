@@ -6,6 +6,10 @@ N14/N15 ratio quantitation
 to install run the `N14N15`:
 
 ```r
+# add path to Bioconductor repositories
+source("http://bioconductor.org/biocLite.R")
+options(repos=biocinstallRepos(character()))
+
 install.packages("devtools")
 library("devtools")
 install_github("N14N15", "vladpetyuk")
