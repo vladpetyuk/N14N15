@@ -13,7 +13,8 @@ setMethod("initialize",
              #
              #.. extract the right results
 #              obj.flat <- flatten(obj, no.redundancy=FALSE) # from mzID package
-             obj.flat <- flatten2(obj) # my hack
+#              obj.flat <- flatten2(obj) # my hack
+             obj.flat <- flatten(obj, no.redundancy=FALSE) # reversed to old
              obj.flat.filt <- subset( obj.flat, 
                                       eval(parse(text=filterString)))
              #.. insert a check point to make sure there are identifications
@@ -72,43 +73,43 @@ setMethod("initialize",
 
 
 
-flatten2 <- function(object, no.redundancy=FALSE)
-   # this is a hack for now.
-   # later it should be replaced with flatten method of mzID class
-   # from mzID package
-{
-             flatPSM <- flatten(object@psm)
-             flatPSM <- flatPSM[, colnames(flatPSM) != 'id']
-             flatEviData <- 
-                cbind(object@evidence@evidence,
-                      object@database@database[
-                         match(object@evidence@evidence$dBSequence_ref,
-                               object@database@database$id), ])
-             flatEviData <- flatEviData[,!names(flatEviData) == 'id']
-             flatPep <- flatten(object@peptides)
-             flatPepEviData <- 
-                merge( flatPep, flatEviData, 
-                       by.x="id", by.y="peptide_ref", all=TRUE)
-             if(no.redundancy){
-                flatPepEviData <- 
-                   flatPepEviData[!duplicated(flatPepEviData[,'id']),]
-             }
-             flatAll <- merge(flatPSM, flatPepEviData, 
-                              by.x='peptide_ref', by.y='id', all=TRUE)
-             flatAll$spectrumFile <- 
-                object@parameters@rawFile$name[
-                   match(flatAll$spectraData_ref,
-                         object@parameters@rawFile$id)]
-             flatAll$databaseFile <- 
-                object@parameters@databaseFile$name[
-                   match(flatAll$searchDatabase_ref,
-                         object@parameters@databaseFile$id)]
-             flatAll <- flatAll[, !grepl('_ref$', 
-                                         names(flatAll), 
-                                         perl=T) & 
-                                   !names(flatAll) == 'id']
-             return(flatAll)
-}
+# flatten2 <- function(object, no.redundancy=FALSE)
+#    # this is a hack for now.
+#    # later it should be replaced with flatten method of mzID class
+#    # from mzID package
+# {
+#              flatPSM <- flatten(object@psm)
+#              flatPSM <- flatPSM[, colnames(flatPSM) != 'id']
+#              flatEviData <- 
+#                 cbind(object@evidence@evidence,
+#                       object@database@database[
+#                          match(object@evidence@evidence$dBSequence_ref,
+#                                object@database@database$id), ])
+#              flatEviData <- flatEviData[,!names(flatEviData) == 'id']
+#              flatPep <- flatten(object@peptides)
+#              flatPepEviData <- 
+#                 merge( flatPep, flatEviData, 
+#                        by.x="id", by.y="peptide_ref", all=TRUE)
+#              if(no.redundancy){
+#                 flatPepEviData <- 
+#                    flatPepEviData[!duplicated(flatPepEviData[,'id']),]
+#              }
+#              flatAll <- merge(flatPSM, flatPepEviData, 
+#                               by.x='peptide_ref', by.y='id', all=TRUE)
+#              flatAll$spectrumFile <- 
+#                 object@parameters@rawFile$name[
+#                    match(flatAll$spectraData_ref,
+#                          object@parameters@rawFile$id)]
+#              flatAll$databaseFile <- 
+#                 object@parameters@databaseFile$name[
+#                    match(flatAll$searchDatabase_ref,
+#                          object@parameters@databaseFile$id)]
+#              flatAll <- flatAll[, !grepl('_ref$', 
+#                                          names(flatAll), 
+#                                          perl=T) & 
+#                                    !names(flatAll) == 'id']
+#              return(flatAll)
+# }
 
 
 
