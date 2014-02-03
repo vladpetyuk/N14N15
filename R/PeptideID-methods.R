@@ -38,7 +38,8 @@ setMethod("initialize",
                                          chargeState,
                                          pepSeq,
                                          modification,
-                                         `MS-GF:SpecEValue`))
+                                         # `MS-GF:SpecEValue`))
+                                         `ms-gf:specevalue`))
              peptides <- unique(peptides)
              
              # Note, redundancy of multiple peptide observations
