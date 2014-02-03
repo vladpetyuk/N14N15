@@ -19,9 +19,18 @@ setMethod("initialize",
                                       eval(parse(text=filterString)))
              #.. insert a check point to make sure there are identifications
              stopifnot(nrow(obj.flat.filt) > 0)
-             # 
+             
+             # kind of hack to ensure compability of column names
+             obj.flat.filt <- within(obj.flat.filt, {
+                pepSeq <- pepseq
+                isDecoy <- isdecoy
+                `MS-GF:SpecEValue` <- `ms-gf:specevalue`
+                pepseq <- NULL
+                isdecoy <- NULL
+                `ms-gf:specevalue` <- NULL})
+             
              peptide.isDecoy <- unique(subset(obj.flat.filt, 
-                                              select=c('pepseq','isdecoy')))
+                                              select=c('pepSeq','isDecoy')))
              peptide.identification.fdr <- 
                 sum(peptide.isDecoy$isDecoy)/sum(!peptide.isDecoy$isDecoy)
              number.unique.peptides <- sum(!peptide.isDecoy$isDecoy)
@@ -38,8 +47,7 @@ setMethod("initialize",
                                          chargeState,
                                          pepSeq,
                                          modification,
-                                         # `MS-GF:SpecEValue`))
-                                         `ms-gf:specevalue`))
+                                         `MS-GF:SpecEValue`))
              peptides <- unique(peptides)
              
              # Note, redundancy of multiple peptide observations
