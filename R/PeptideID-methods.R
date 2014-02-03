@@ -26,10 +26,16 @@ setMethod("initialize",
                 isDecoy <- isdecoy
                 `MS-GF:SpecEValue` <- `ms-gf:specevalue`
                 spectrumID <- spectrumid
+                experimentalMassToCharge <- experimentalmasstocharge
+                calculatedMassToCharge <- calculatedmasstocharge
+                chargeState <- chargestate
                 pepseq <- NULL
                 isdecoy <- NULL
                 `ms-gf:specevalue` <- NULL
-                spectrumid <- NULL})
+                spectrumid <- NULL
+                experimentalmasstocharge <- NULL
+                calculatedmasstocharge <- NULL
+                chargestate <- NULL})
              
              peptide.isDecoy <- unique(subset(obj.flat.filt, 
                                               select=c('pepSeq','isDecoy')))
