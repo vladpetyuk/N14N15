@@ -21,7 +21,7 @@ setMethod("initialize",
              stopifnot(nrow(obj.flat.filt) > 0)
              # 
              peptide.isDecoy <- unique(subset(obj.flat.filt, 
-                                              select=c('pepSeq','isDecoy')))
+                                              select=c('pepseq','isdecoy')))
              peptide.identification.fdr <- 
                 sum(peptide.isDecoy$isDecoy)/sum(!peptide.isDecoy$isDecoy)
              number.unique.peptides <- sum(!peptide.isDecoy$isDecoy)
