@@ -146,21 +146,26 @@ setMethod("fitN14N15",
 
 setMethod("reportToPNG", 
           signature(.Object="N14N15"), 
-          definition=function(.Object) 
+          definition=function(.Object, pngDir=".") 
           {
-             pngDir <- file.path(.Object@workingDir,"png")
-             if(!file.exists(pngDir)){
-                dir.create(pngDir)
-                setwd(pngDir)
-             }else{
-                # clean it
-                setwd(pngDir)
-                invisible(file.remove(list.files()))
+             curDir <- getwd()             
+             if(pngDir != "."){
+#                 pngDir <- file.path(.Object@workingDir,"png")
+                if(!file.exists(pngDir)){
+                   dir.create(pngDir)
+                   setwd(pngDir)
+                }else{
+                   # clean it
+                   setwd(pngDir)
+                   invisible(file.remove(list.files()))
+                }
              }
+             
              for( i in 1:length(.Object@peptideFits)){
                 reportToPNG(.Object@peptideFits[[i]])
              }
-             setwd(.Object@workingDir)
+#              setwd(.Object@workingDir)
+             setwd(curDir)
           }
 )
 
