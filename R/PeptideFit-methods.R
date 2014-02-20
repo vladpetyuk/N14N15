@@ -316,9 +316,11 @@ setMethod("generateSummedSpectrum", "PeptideFit",
              pl.resampled <- approx(pl[,1], pl[,2], xout=xout)
              mat.resampled <- matrix(nrow=length(xout), 
                                      ncol=length(.Object@FWHM.MS1))
-             for(i in 1:length(.Object@FWHM.MS1)){
+             for(i in seq_len(length(.Object@FWHM.MS1))){
                 pl <- peaks(.Object@mzRObj, .Object@FWHM.MS1[i])
                 pl <- pl[(pl[,1] >= mz.min) & (pl[,1] <= mz.max),]
+                # impute zeros from beginning and the end
+                pl <- rbind(c(mz.min, 0), pl, c(mz.max, 0)) # safety step in case of pl is empty
                 pl.resampled <- approx(pl[,1], pl[,2], xout=xout)
                 mat.resampled[,i] <- pl.resampled$y
              }
