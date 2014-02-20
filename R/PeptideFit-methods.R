@@ -27,6 +27,21 @@ setMethod("initialize",
              # peak finding
              .Object <- findChromPeakCWT(.Object)
              #..
+             # need a more elegant handling of failed to quantify peptides
+             if(.Object@chromPeakSNR == 0){
+                .Object@isotopic.intensity <- 0
+                .Object@massErrorPPM <- 0
+                .Object@r2.N15 <- 0
+                .Object@r2.N14 <- 0
+                .Object@theor.intensities <- 0
+                .Object@theor.mz <- 0
+                .Object@molecular.proportion.heavy <- -1
+                .Object@atomic.proportion.heavy <- -1
+                .Object@centroid.peak.mz <- 0
+                .Object@centroid.peak.intensities <- 0
+                .Object@summedMS1spectrum <- matrix()
+                return(.Object)
+             }
              # summed MS1
              .Object@summedMS1spectrum <- generateSummedSpectrum(.Object)
              #..
@@ -48,8 +63,8 @@ setMethod("initialize",
                 .Object@r2.N14 <- 0
                 .Object@theor.intensities <- 0
                 .Object@theor.mz <- 0
-                .Object@molecular.proportion.heavy <- 0
-                .Object@atomic.proportion.heavy <- 0
+                .Object@molecular.proportion.heavy <- -1
+                .Object@atomic.proportion.heavy <- -1
                 .Object@centroid.peak.mz <- 0
                 .Object@centroid.peak.intensities <- 0
                 return(.Object)
@@ -213,6 +228,17 @@ setMethod("findChromPeak", "PeptideFit",
 setMethod("findChromPeakCWT", "PeptideFit",
           definition=function(.Object, FWHM=7, SNR.Th=1)
           {
+             # in case there are only zeros in EIC
+             if(all(.Object@eic[,2] == 0)){
+                i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
+                .Object@centerMS1 <- .Object@eic[i,1]
+                .Object@FWHM.MS1 <- FWHM
+                .Object@lowMS1 <- .Object@eic[i-FWHM,1]
+                .Object@highMS1 <- .Object@eic[i+FWHM,1]
+                .Object@chromPeakSNR <- 0
+                return(.Object)
+             }             
+                          
              while(TRUE){
                 peakInfo <- try(peakDetectionCWT(.Object@eic[,2], 
                                              scales=c(1:FWHM), 
@@ -261,6 +287,8 @@ setMethod("findChromPeakCWT", "PeptideFit",
              ms1scan <- .Object@eic[selPeakIndices,1]
              idx.range <- floor((selPeakIndices-best.scale/2)):
                 ceiling((selPeakIndices+best.scale/2))
+             # make sure the selection fits the window
+             idx.range <- idx.range[idx.range > 0 & idx.range < nrow(.Object@eic)]
              scans.fwhm <- .Object@eic[idx.range,1]
              .Object@centerMS1 <- ms1scan
              .Object@FWHM.MS1 <- scans.fwhm
@@ -316,7 +344,10 @@ setMethod("get_isotopic_intensity", "PeptideFit",
 setMethod("r2.N14", "PeptideFit",
           definition=function(.Object)
           {
-             ii <- 1:.Object@maxisotopes
+             ii <- seq_len(.Object@maxisotopes)
+             # in case there are all zero intensities
+             if(all(.Object@centroid.peak.intensities[ii] == 0))
+                return(0)
              cor.val <- cor(.Object@centroid.peak.intensities[ii],
                             .Object@theor.intensities[ii])
              return(cor.val^2)
@@ -381,6 +412,15 @@ setMethod("plotIsoFit", "PeptideFit",
           definition=function(.Object)
           {
              op <- par(mar=c(5,4,6,2))
+
+             # in case there are no peaks and therefore no summed spectra
+             if(identical(.Object@summedMS1spectrum, matrix())){
+                # frame()
+                plot(1, type="n", axes=F, xlab="", ylab="")
+                abline(0,1)
+                abline(2,-1)
+                return(invisible(NULL))
+             }
              plot(.Object@summedMS1spectrum, type='n')
              points(.Object@theor.mz, .Object@theor.intensities, 
                     type='h', 
