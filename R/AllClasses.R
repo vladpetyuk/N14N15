@@ -43,8 +43,8 @@ setClass(Class="PeptideFit",
                         r2.N14='numeric',
                         r2.N15='numeric',
                         isotopic.intensity='numeric'),
-         prototype(scanConsiderationRange=50,
-                   peakMatchingTolPPM=5))
+         prototype(scanConsiderationRange=75, # hardcoded tolerance. move to args.
+                   peakMatchingTolPPM=10)) # hardcoded tolerance. move to args.
 
 
 setClass(Class="N14N15",
