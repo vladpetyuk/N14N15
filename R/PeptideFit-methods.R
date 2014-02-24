@@ -7,7 +7,9 @@ setMethod("initialize",
                               experimentalMassToCharge,
                               charge,
                               ms2Scan,
-                              mzRObj)
+                              mzRObj,
+                              scanConsiderationRange,
+                              peakMatchingTolPPM)
           {
              #
              .Object@peptideSequence <- peptideSequence
@@ -15,6 +17,8 @@ setMethod("initialize",
              .Object@charge <- charge
              .Object@ms2Scan <- ms2Scan
              .Object@mzRObj <- mzRObj
+             .Object@scanConsiderationRange <- scanConsiderationRange
+             .Object@peakMatchingTolPPM <- peakMatchingTolPPM
              .Object@elementalCompVec <- 
                 seq.to.elements.X(peptideSequence, IAA=TRUE)
              .Object@elementalCompStr <- paste(names(.Object@elementalCompVec),
@@ -52,7 +56,7 @@ setMethod("initialize",
                                    0.0107) # this is C13 proportion
              # 1. centroid the spectrum
              centroids <- centroiding( .Object@summedMS1spectrum, 
-                                       ppm.tol=25, 
+                                       ppm.tol=25,       # Warning! Hardcoded tolerance.
                                        mad.threshold=4)
              
              # need a more elegant handling of failed to quantify peptides
@@ -78,7 +82,7 @@ setMethod("initialize",
                                                  elements, 
                                                  .Object@elementalCompVec['X'],
                                                  .Object@maxisotopes,
-                                                 ppm.tolerance = 5)
+                                                 .Object@peakMatchingTolPPM)
              # 4. get centroid matching intensities
              centroid.peak.intensities <- rep(0, 
                                               .Object@elementalCompVec['X'] + 
@@ -98,7 +102,7 @@ setMethod("initialize",
              # 5. optimize. Args: fmla.str, z, elements, maxisotopes
              # -- (pars)
              parStart = c( atomic.proportion.heavy=0.8, 
-                           molecular.proportion.heavy=0.5 )
+                           molecular.proportion.heavy=0.5 )  # Move starting parameters into args
              # -- (constraints)
              # amtomic.propotion.heavy >= 0 & <= 1
              # molecular.proportion.heavy >= 0 & <= 1
@@ -423,6 +427,7 @@ setMethod("plotIsoFit", "PeptideFit",
                 abline(2,-1)
                 return(invisible(NULL))
              }
+             # normal plotting
              plot(.Object@summedMS1spectrum, type='n')
              points(.Object@theor.mz, .Object@theor.intensities, 
                     type='h', 
@@ -766,7 +771,7 @@ get_N14N15_envelop <- function( fmla.str, z, elements,
    N14N15.mix <- N15.envelope
    N14N15.mix[1:maxisotopes,] <- N14.envelope # dangerous way !!
    #
-   N14N15.mix[,1] <- (N14N15.mix[,1] + 1.007276*z)/z
+   N14N15.mix[,1] <- (N14N15.mix[,1] + 1.007276*z)/z   # 1.007276 is proton mass
    return(N14N15.mix)
 }
 
@@ -791,12 +796,12 @@ get_matching_indices <- function( centroids.mz, fmla.str, z,
                                   elements,
                                   shift.heavy, 
                                   maxisotopes,
-                                  ppm.tolerance = 5)
+                                  ppm.tolerance)
    #
 {
    theor.mz <- get_N14N15_envelop(fmla.str, z, elements, 
                                   shift.heavy, maxisotopes, 
-                                  0.88, 0.25)[,1]
+                                  0.88, 0.25)[,1]           # these are hardcoded for a purpose of good isotope coverage
    diffs <- outer( theor.mz, centroids.mz, FUN='-')
    diffs.min <- apply(abs(diffs), 1, which.min)
    diffs.ppm <- 1e6*(theor.mz - centroids.mz[diffs.min])/theor.mz

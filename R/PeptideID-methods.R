@@ -65,7 +65,10 @@ setMethod("initialize",
                         .(chargeState, pepSeq, modification), 
                         summarize,
                   ms2Scan = list(scan),
-                  experimentalMassToCharge = mean(experimentalMassToCharge),
+                  experimentalMassToCharge = 
+                     N14N15:::mean2(experimentalMassToCharge,
+                           calculatedMassToCharge,
+                           chargeState),
                   calculatedMassToCharge = unique(calculatedMassToCharge))
 
              
@@ -85,6 +88,16 @@ setMethod("initialize",
           }
 )
 
+
+
+mean2 <- function(x, expectedValue, chargeState)
+{
+   rough.mass.diffs <- abs(x-expectedValue)*chargeState
+   out <- mean(x[rough.mass.diffs < 0.5])
+   if(is.na(out))
+      out <- x[1] # just return first if there ae
+   return(out) # if >= 0.5 Da away - do not bother
+}  
 
 
 

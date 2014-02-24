@@ -125,7 +125,10 @@ setMethod("quantify", "N14N15",
 
 setMethod("fitN14N15",
           signature('N14N15','numeric'),
-          definition=function(.Object, index)
+          definition=function(.Object, 
+                              index, 
+                              scanConsiderationRange=50, 
+                              peakMatchingTolPPM=5)
    {
       fitObj <- new("PeptideFit",
                   peptideSequence=
@@ -137,7 +140,9 @@ setMethod("fitN14N15",
                         'chargeState'],
                   ms2Scan=.Object@peptideIDs@peptides[index,
                         'ms2Scan'][[1]],
-                  mzRObj=.Object@mzRObj)
+                  mzRObj=.Object@mzRObj,
+                  peakMatchingTolPPM=peakMatchingTolPPM,
+                  scanConsiderationRange=scanConsiderationRange)
       return(fitObj)
    }
 )
