@@ -237,8 +237,8 @@ setMethod("findChromPeakCWT", "PeptideFit",
                 i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
                 .Object@centerMS1 <- .Object@eic[i,1]
                 .Object@FWHM.MS1 <- FWHM
-                .Object@lowMS1 <- .Object@eic[i-FWHM,1]
-                .Object@highMS1 <- .Object@eic[i+FWHM,1]
+                .Object@lowMS1 <- .Object@eic[max(i-FWHM, 0),1]
+                .Object@highMS1 <- .Object@eic[min(i+FWHM, nrow(.Object@eic)),1]
                 .Object@chromPeakSNR <- 0
                 return(.Object)
              }             
@@ -271,8 +271,8 @@ setMethod("findChromPeakCWT", "PeptideFit",
                 i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
                 .Object@centerMS1 <- .Object@eic[i,1]
                 .Object@FWHM.MS1 <- FWHM
-                .Object@lowMS1 <- .Object@eic[i-FWHM,1]
-                .Object@highMS1 <- .Object@eic[i+FWHM,1]
+                .Object@lowMS1 <- .Object@eic[max(i-FWHM, 0),1]
+                .Object@highMS1 <- .Object@eic[min(i+FWHM, nrow(.Object@eic)),1]
                 .Object@chromPeakSNR <- 0
                 return(.Object)
              }
