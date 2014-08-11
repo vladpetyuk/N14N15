@@ -43,6 +43,7 @@ N14N15 <- function(mzXMLName, mzIdentMLName, filterString, ...) {
    .Object@datasetName <- sub("\\.mzXML","",basename(mzXMLName))
    #-----------------------
    .Object@mzRObj <- openMSfile(mzXMLName) #
+#    close(.Object@mzRObj) # let's close it to be (memory leak) safe
    if(missing(mzIdentMLName))
       mzIdentMLName <- gsub("\\.mzXML","\\.mzid",mzXMLName)
 #    mzIDObj <- mzID(mzIdentMLName)
@@ -80,7 +81,7 @@ setMethod("quantify", "N14N15",
              # filling ans with 
              # library("multicore")
              # this works only on Linux/MacOSX
-             # Actully the problem may be concurrent access to mzXML file
+             # Actually the problem may be concurrent access to mzXML file
 #              ans <- mclapply(seq_along(k), 
 #                            function(i) {fitN14N15(object, k[i])},
 #                            mc.cores=8)
@@ -140,7 +141,7 @@ setMethod("fitN14N15",
                         'chargeState'],
                   ms2Scan=.Object@peptideIDs@peptides[index,
                         'ms2Scan'][[1]],
-                  mzRObj=.Object@mzRObj,
+                  mzRObj=.Object@mzRObj, 
                   peakMatchingTolPPM=peakMatchingTolPPM,
                   scanConsiderationRange=scanConsiderationRange)
       return(fitObj)
@@ -167,7 +168,8 @@ setMethod("reportToPNG",
              }
              
              for( i in 1:length(.Object@peptideFits)){
-                reportToPNG(.Object@peptideFits[[i]])
+#                 reportToPNG(.Object@peptideFits[[i]])
+                reportToPNG(.Object@peptideFits[[i]], .Object@mzRObj)
              }
 #              setwd(.Object@workingDir)
              setwd(curDir)

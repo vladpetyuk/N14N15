@@ -15,6 +15,7 @@ setMethod("initialize",
 #              obj.flat <- flatten(obj, no.redundancy=FALSE) # from mzID package
 #              obj.flat <- flatten2(obj) # my hack
              obj.flat <- flatten(obj, no.redundancy=FALSE) # reversed to old
+             rm(obj) # just in case it cases some memory issues later
              obj.flat.filt <- subset( obj.flat, 
                                       eval(parse(text=filterString)))
              #.. insert a check point to make sure there are identifications

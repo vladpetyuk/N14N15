@@ -16,7 +16,7 @@ setMethod("initialize",
              .Object@experimentalMassToCharge <- experimentalMassToCharge
              .Object@charge <- charge
              .Object@ms2Scan <- ms2Scan
-             .Object@mzRObj <- mzRObj
+#              .Object@mzRObj <- mzRObj
              .Object@scanConsiderationRange <- scanConsiderationRange
              .Object@peakMatchingTolPPM <- peakMatchingTolPPM
              .Object@elementalCompVec <- 
@@ -25,7 +25,8 @@ setMethod("initialize",
                                                .Object@elementalCompVec,
                                                sep='',collapse='')
              # eic 
-             .Object@eic <- generateEIC(.Object)
+#              .Object@eic <- generateEIC(.Object)
+             .Object@eic <- generateEIC(.Object, mzRObj)
              .Object@eic.smoothed <- smoothEIC(.Object)
              #..
              # peak finding
@@ -47,7 +48,8 @@ setMethod("initialize",
                 return(.Object)
              }
              # summed MS1
-             .Object@summedMS1spectrum <- generateSummedSpectrum(.Object)
+#              .Object@summedMS1spectrum <- generateSummedSpectrum(.Object)
+             .Object@summedMS1spectrum <- generateSummedSpectrum(.Object, mzRObj)
              #..
              # fit isotope distribution to spectrum
              #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -175,9 +177,13 @@ setMethod("initialize",
 
 
 setMethod("generateEIC", "PeptideFit",
-          definition=function(.Object)
+#           definition=function(.Object)  # used to be .Object@mzRObj
+          definition=function(.Object, mzRObj)
           {
-             ms1.header <- subset(header(.Object@mzRObj), msLevel == 1)
+#              ms1.header <- subset(header(.Object@mzRObj), msLevel == 1)
+#              initializeRamp(mzRObj)
+             ms1.header <- subset(header(mzRObj), msLevel == 1)
+#              close(mzRObj)
              i0 <- which.min(abs(ms1.header$seqNum - median(.Object@ms2Scan)))
              tol.mz <- .Object@experimentalMassToCharge * 
                 .Object@peakMatchingTolPPM / 1e6
@@ -189,7 +195,10 @@ setMethod("generateEIC", "PeptideFit",
              i00 <- i00[ i00 < nrow(ms1.header)]
              for(ii in i00){
                 scan.i <- ms1.header[ii,'seqNum']
-                pp <- peaks(.Object@mzRObj, scan.i)
+#                 pp <- peaks(.Object@mzRObj, scan.i)
+#                 initializeRamp(mzRObj)
+                pp <- peaks(mzRObj, scan.i)
+#                 close(mzRObj)
                 pp <- pp[pp[,1] > .Object@experimentalMassToCharge - tol.mz & 
                       pp[,1] < (.Object@experimentalMassToCharge + tol.mz),
                          ,drop=FALSE]
@@ -305,9 +314,13 @@ setMethod("findChromPeakCWT", "PeptideFit",
 
 
 setMethod("generateSummedSpectrum", "PeptideFit",
-          definition=function(.Object, padDa=10)
+#           definition=function(.Object, padDa=10) # it used to be .Object@mzRObj
+          definition=function(.Object, mzRObj, padDa=10)
           {
-             pl <- peaks(.Object@mzRObj, .Object@centerMS1)
+#              initializeRamp(mzRObj)
+             pl <- peaks(mzRObj, .Object@centerMS1)
+#              close(mzRObj)
+#              pl <- peaks(.Object@mzRObj, .Object@centerMS1)
              distance <- .Object@elementalCompVec['X']/.Object@charge
              padTh <- padDa/.Object@charge
              pl <- pl[(pl[,1] > .Object@experimentalMassToCharge-padTh) & 
@@ -321,7 +334,10 @@ setMethod("generateSummedSpectrum", "PeptideFit",
              mat.resampled <- matrix(nrow=length(xout), 
                                      ncol=length(.Object@FWHM.MS1))
              for(i in seq_len(length(.Object@FWHM.MS1))){
-                pl <- peaks(.Object@mzRObj, .Object@FWHM.MS1[i])
+#                 pl <- peaks(.Object@mzRObj, .Object@FWHM.MS1[i])
+#                 initializeRamp(mzRObj)
+                pl <- peaks(mzRObj, .Object@FWHM.MS1[i])
+#                 close(mzRObj)
                 pl <- pl[(pl[,1] >= mz.min) & (pl[,1] <= mz.max),]
                 # impute zeros from beginning and the end
                 pl <- rbind(c(mz.min, 0), pl, c(mz.max, 0)) # safety step in case of pl is empty
@@ -489,13 +505,18 @@ setMethod("getMassErrorPPM", "PeptideFit",
 
 
 setMethod("plot3D", "PeptideFit",
-          definition=function(.Object, window=NULL)
+#           definition=function(.Object, window=NULL)  # .Object@mzRObj
+          definition=function(.Object, mzRObj, window=NULL)
           {
              mz.pad = 0.25
              scan.pad = 0 # 0.25
              mzs <- range(.Object@summedMS1spectrum[,1])
-             ms1 <- subset(header(.Object@mzRObj), msLevel == 1, 
+#              ms1 <- subset(header(.Object@mzRObj), msLevel == 1, 
+#                            select=c(seqNum))[,1]
+#              initializeRamp(mzRObj)
+             ms1 <- subset(header(mzRObj), msLevel == 1, 
                            select=c(seqNum))[,1]
+#              close(mzRObj)
              center.idx <- which(.Object@centerMS1 == ms1)
              if(is.null(window))
                 window <- .Object@scanConsiderationRange
@@ -510,10 +531,15 @@ setMethod("plot3D", "PeptideFit",
              resMz = 0.1
              
              # get3Dmap prints 1. Should be silences somehow.
-             im <- get3Dmap( .Object@mzRObj, scans, 
+#              im <- get3Dmap( .Object@mzRObj, scans, 
+#                              min(mzs)-diff(mzs)*mz.pad, 
+#                              max(mzs)+diff(mzs)*mz.pad, resMz=resMz)
+#              initializeRamp(mzRObj)
+             im <- get3Dmap( mzRObj, scans, 
                              min(mzs)-diff(mzs)*mz.pad, 
                              max(mzs)+diff(mzs)*mz.pad, resMz=resMz)
-             
+#              close(mzRObj)
+
              op <- par(mar=c(5,4,4,6))
 #              col <- colorRampPalette(brewer.pal(9,"Blues"))(256)
 #              col <- rev(colorRampPalette(brewer.pal(9,"Greys"))(256))
@@ -574,7 +600,8 @@ setMethod("plot3D", "PeptideFit",
 
 
 setMethod("reportToPNG", "PeptideFit",
-          definition=function(.Object)
+#           definition=function(.Object)
+          definition=function(.Object, mzRObj)
           {
              filename <- sprintf("%s_z%s.png",
                                     .Object@peptideSequence,
@@ -583,7 +610,8 @@ setMethod("reportToPNG", "PeptideFit",
              op <- par(mfcol=c(2,2))
              plotIsoFit(.Object)
              plotEIC(.Object)
-             plot3D(.Object)
+#              plot3D(.Object)
+             plot3D(.Object, mzRObj)
              par(op)
              dev.off()
           }
