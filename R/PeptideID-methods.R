@@ -14,29 +14,30 @@ setMethod("initialize",
              #.. extract the right results
 #              obj.flat <- flatten(obj, no.redundancy=FALSE) # from mzID package
 #              obj.flat <- flatten2(obj) # my hack
-             obj.flat <- flatten(obj, no.redundancy=FALSE) # reversed to old
+#              obj.flat <- flatten(obj, no.redundancy=FALSE) # reversed to old
+             obj.flat <- flatten(obj, safeNames=FALSE) # reversed to old
              rm(obj) # just in case it cases some memory issues later
              obj.flat.filt <- subset( obj.flat, 
                                       eval(parse(text=filterString)))
              #.. insert a check point to make sure there are identifications
              stopifnot(nrow(obj.flat.filt) > 0)
              
-             # kind of hack to ensure compability of column names
-             obj.flat.filt <- within(obj.flat.filt, {
-                pepSeq <- pepseq
-                isDecoy <- isdecoy
-                `MS-GF:SpecEValue` <- `ms-gf:specevalue`
-                spectrumID <- spectrumid
-                experimentalMassToCharge <- experimentalmasstocharge
-                calculatedMassToCharge <- calculatedmasstocharge
-                chargeState <- chargestate
-                pepseq <- NULL
-                isdecoy <- NULL
-                `ms-gf:specevalue` <- NULL
-                spectrumid <- NULL
-                experimentalmasstocharge <- NULL
-                calculatedmasstocharge <- NULL
-                chargestate <- NULL})
+#              # kind of hack to ensure compability of column names
+#              obj.flat.filt <- within(obj.flat.filt, {
+#                 pepSeq <- pepseq
+#                 isDecoy <- isdecoy
+#                 `MS-GF:SpecEValue` <- `ms-gf:specevalue`
+#                 spectrumID <- spectrumid
+#                 experimentalMassToCharge <- experimentalmasstocharge
+#                 calculatedMassToCharge <- calculatedmasstocharge
+#                 chargeState <- chargestate
+#                 pepseq <- NULL
+#                 isdecoy <- NULL
+#                 `ms-gf:specevalue` <- NULL
+#                 spectrumid <- NULL
+#                 experimentalmasstocharge <- NULL
+#                 calculatedmasstocharge <- NULL
+#                 chargestate <- NULL})
              
              peptide.isDecoy <- unique(subset(obj.flat.filt, 
                                               select=c('pepSeq','isDecoy')))
