@@ -40,12 +40,16 @@ N14N15 <- function(mzXMLName, mzIdentMLName, filterString, ...) {
    # Note! No path checking yet.
    # work out paths
    .Object@workingDir <- dirname(mzXMLName)
-   .Object@datasetName <- sub("\\.mzXML","",basename(mzXMLName))
+   .Object@datasetName <- sub("\\.mzX?ML(\\.gz)?","",basename(mzXMLName))
    #-----------------------
-   .Object@mzRObj <- openMSfile(mzXMLName) #
+   .Object@mzRObj <- openMSfile(mzXMLName, backend="Ramp") #
 #    close(.Object@mzRObj) # let's close it to be (memory leak) safe
-   if(missing(mzIdentMLName))
+   if(missing(mzIdentMLName)){
       mzIdentMLName <- gsub("\\.mzXML","\\.mzid",mzXMLName)
+      mzIdentMLName <- paste(.Object@datasetName, "mzid", sep=".")
+      mzIdentMLName <- file.path(.Object@workingDir, mzIdentMLName)
+      mzIdentMLName <- list.files(pattern = mzIdentMLName)[1] # I just assume there is one
+   }
 #    mzIDObj <- mzID(mzIdentMLName)
 #    .Object@mzIDObj <- mzIDObj
    #------------------------
@@ -152,7 +156,7 @@ setMethod("fitN14N15",
 
 setMethod("reportToPNG", 
           signature(.Object="N14N15"), 
-          definition=function(.Object, pngDir=".") 
+          definition=function(.Object, pngDir=".", ...) 
           {
              curDir <- getwd()             
              if(pngDir != "."){
@@ -169,7 +173,7 @@ setMethod("reportToPNG",
              
              for( i in 1:length(.Object@peptideFits)){
 #                 reportToPNG(.Object@peptideFits[[i]])
-                reportToPNG(.Object@peptideFits[[i]], .Object@mzRObj)
+                reportToPNG(.Object@peptideFits[[i]], .Object@mzRObj, ...)
              }
 #              setwd(.Object@workingDir)
              setwd(curDir)

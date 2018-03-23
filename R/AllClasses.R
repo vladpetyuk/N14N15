@@ -18,7 +18,7 @@ setClass(Class="PeptideFit",
                         ms2Scan='numeric',                        
                         experimentalMassToCharge='numeric',
                         charge='numeric',
-                        mzRObj='mzRramp',
+                        mzRObj='mzRramp', # perhaps later I need to switch to mzRpwiz
                         #--- secondary
                         elementalCompVec='numeric',
                         elementalCompStr='character',

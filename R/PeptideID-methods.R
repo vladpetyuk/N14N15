@@ -47,7 +47,7 @@ setMethod("initialize",
              
              obj.flat.filt <- subset(obj.flat.filt, !isDecoy)
              obj.flat.filt$scan <- as.numeric(sapply(
-                strsplit(obj.flat.filt$spectrumID,'='),'[[',2))
+                strsplit(obj.flat.filt$spectrumID,'scan='),'[[',2))
              
              # selecting only what matters for peptides
              peptides <- subset(obj.flat.filt,

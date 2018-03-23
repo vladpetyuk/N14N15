@@ -28,10 +28,17 @@ setMethod("initialize",
 #              .Object@eic <- generateEIC(.Object)
              .Object@eic <- generateEIC(.Object, mzRObj)
              .Object@eic.smoothed <- smoothEIC(.Object)
+             
              #..
-             # peak finding
+             # Peak Finding
+             # fills the following slots:
+             # @centerMS1
+             # @FWHM.MS1
+             # @lowMS1
+             # @highMS1
+             # @chromPeakSNR
              .Object <- findChromPeakCWT(.Object)
-             #..
+             
              # need a more elegant handling of failed to quantify peptides
              if(.Object@chromPeakSNR == 0){
                 .Object@isotopic.intensity <- 0
@@ -184,20 +191,35 @@ setMethod("generateEIC", "PeptideFit",
 #              initializeRamp(mzRObj)
              ms1.header <- subset(header(mzRObj), msLevel == 1)
 #              close(mzRObj)
-             i0 <- which.min(abs(ms1.header$seqNum - median(.Object@ms2Scan)))
+             
+             # 2017-03-09 change. mzML robust version
+             # i0 <- which.min(abs(ms1.header$seqNum - median(.Object@ms2Scan)))
+             i0 <- which.min(abs(ms1.header$acquisitionNum - median(.Object@ms2Scan))) # row number (NOT name!)
+             # The line above is extracting the row number index in ms1.header table.
+             # Note this is not scan number itself!
+             
              tol.mz <- .Object@experimentalMassToCharge * 
                 .Object@peakMatchingTolPPM / 1e6
              scans <- numeric()
              sum.ints <- numeric()
-             i00 <- i0 + (-.Object@scanConsiderationRange):
-                .Object@scanConsiderationRange
+             
+             # this i, i0, i00 indexing is fine as long as it is trully 
+             # index in the header table and NOT treated as scan number
+             i00 <- i0 + (-.Object@scanConsiderationRange):.Object@scanConsiderationRange
              i00 <- i00[ i00 > 0]
              i00 <- i00[ i00 < nrow(ms1.header)]
              for(ii in i00){
-                scan.i <- ms1.header[ii,'seqNum']
+
+                 # 2017-03-09 change. make it mzML robust                 
+                 # scan.i <- ms1.header[ii,'seqNum']
+                 scan.i <- ms1.header[ii,'acquisitionNum']
+                 idx <- rownames(ms1.header)[ii]
+                 
 #                 pp <- peaks(.Object@mzRObj, scan.i)
 #                 initializeRamp(mzRObj)
-                pp <- peaks(mzRObj, scan.i)
+                 # I believe these are header indices rather then true scan numbers.
+                 # Thus the scan.i extracted above as 
+                 pp <- peaks(mzRObj, scan = as.numeric(idx))
 #                 close(mzRObj)
                 pp <- pp[pp[,1] > .Object@experimentalMassToCharge - tol.mz & 
                       pp[,1] < (.Object@experimentalMassToCharge + tol.mz),
@@ -241,31 +263,69 @@ setMethod("findChromPeak", "PeptideFit",
 setMethod("findChromPeakCWT", "PeptideFit",
           definition=function(.Object, FWHM=7, SNR.Th=1)
           {
+              
+              fill_empty <- function(.Object){
+                  message("Failed pick picking with CWT")
+                  i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
+                  .Object@centerMS1 <- .Object@eic[i,1]
+                  .Object@FWHM.MS1 <- FWHM
+                  .Object@lowMS1 <- .Object@eic[max(i-FWHM, 0),1]
+                  .Object@highMS1 <- .Object@eic[min(i+FWHM, nrow(.Object@eic)),1]
+                  .Object@chromPeakSNR <- 0
+                  return(.Object)
+              }
+              
+              
              # in case there are only zeros in EIC
              if(all(.Object@eic[,2] == 0)){
-                i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
-                .Object@centerMS1 <- .Object@eic[i,1]
-                .Object@FWHM.MS1 <- FWHM
-                .Object@lowMS1 <- .Object@eic[max(i-FWHM, 0),1]
-                .Object@highMS1 <- .Object@eic[min(i+FWHM, nrow(.Object@eic)),1]
-                .Object@chromPeakSNR <- 0
-                return(.Object)
+                # i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
+                # .Object@centerMS1 <- .Object@eic[i,1]
+                # .Object@FWHM.MS1 <- FWHM
+                # .Object@lowMS1 <- .Object@eic[max(i-FWHM, 0),1]
+                # .Object@highMS1 <- .Object@eic[min(i+FWHM, nrow(.Object@eic)),1]
+                # .Object@chromPeakSNR <- 0
+                return(fill_empty(.Object))
              }             
-                          
+              
+              
+              # padding to enable peak detection near edges
+              # pad_len <- length(.Object@eic[,2])
+              pad_len <- FWHM * 16 + 2 # 16 and 2 are because of cwt in MassSpecWavelet pkg
+              # pad_val <- median(.Object@eic[,2])
+              # pad_val <- quantile(.Object@eic[,2], 0.05)
+              pad_val <- 0
+              padded_eic <- c(rep(pad_val, pad_len), 
+                              .Object@eic[,2],
+                              rep(pad_val, pad_len))
+
              while(TRUE){
-                peakInfo <- try(peakDetectionCWT(.Object@eic[,2], 
+                peakInfo <- try(peakDetectionCWT(padded_eic, 
                                              scales=c(1:FWHM), 
-                                             SNR.Th=SNR.Th))
+                                             SNR.Th=SNR.Th),
+                                silent = TRUE)
                 if(class(peakInfo) != "try-error")
                    break
-                else
-                   FWHM <- FWHM - 1
+                else {
+                    message(sprintf("CWT scale of %s was too large. Reducing the FWHM.", FWHM))
+                    FWHM <- FWHM - 1
+                    if(FWHM == 0)
+                        return(fill_empty(.Object))
+                }
              }
-             majorPeakInfo <- peakInfo$majorPeakInfo
+              
+              # offset padding in peak indices
+              majorPeakInfo <- peakInfo$majorPeakInfo
+              majorPeakInfo$peakCenterIndex <- majorPeakInfo$peakCenterIndex - pad_len
+              majorPeakInfo$allPeakIndex <- majorPeakInfo$allPeakIndex - pad_len
+              majorPeakInfo$potentialPeakIndex <- majorPeakInfo$potentialPeakIndex - pad_len
+              
+
+             
              selPeakIndices <- with(majorPeakInfo, 
                                        allPeakIndex[
                                           peakSNR > SNR.Th & 
-                                          peakScale >= (FWHM*0.67)
+                                          peakScale >= (FWHM*0.67) &
+                                          allPeakIndex > 0
                                        ])
              # in case there are no good peaks, do not apply SNR threshold
              # if(is.na(selPeakIndices)[1])
@@ -277,13 +337,13 @@ setMethod("findChromPeakCWT", "PeptideFit",
              
              # if still nothing let's deal with it
              if(length(selPeakIndices) == 0){
-                i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
-                .Object@centerMS1 <- .Object@eic[i,1]
-                .Object@FWHM.MS1 <- FWHM
-                .Object@lowMS1 <- .Object@eic[max(i-FWHM, 0),1]
-                .Object@highMS1 <- .Object@eic[min(i+FWHM, nrow(.Object@eic)),1]
-                .Object@chromPeakSNR <- 0
-                return(.Object)
+                # i <- which.min(abs(.Object@eic[,1] - median(.Object@ms2Scan)))
+                # .Object@centerMS1 <- .Object@eic[i,1]
+                # .Object@FWHM.MS1 <- FWHM
+                # .Object@lowMS1 <- .Object@eic[max(i-FWHM, 0),1]
+                # .Object@highMS1 <- .Object@eic[min(i+FWHM, nrow(.Object@eic)),1]
+                # .Object@chromPeakSNR <- 0
+                return(fill_empty(.Object))
              }
              
              # if multiple peaks, use one,
@@ -318,7 +378,9 @@ setMethod("generateSummedSpectrum", "PeptideFit",
           definition=function(.Object, mzRObj, padDa=10)
           {
 #              initializeRamp(mzRObj)
-             pl <- peaks(mzRObj, .Object@centerMS1)
+              ms1Idx <- which(header(mzRObj)$acquisitionNum == .Object@centerMS1)
+              pl <- peaks(mzRObj, ms1Idx)
+             # pl <- peaks(mzRObj, .Object@centerMS1)
 #              close(mzRObj)
 #              pl <- peaks(.Object@mzRObj, .Object@centerMS1)
              distance <- .Object@elementalCompVec['X']/.Object@charge
@@ -328,7 +390,9 @@ setMethod("generateSummedSpectrum", "PeptideFit",
                              distance+padTh),]
              mz.min <- min(pl[,1])
              mz.max <- max(pl[,1])
-             mz.step <- min(diff(pl[,1])) # may be fixed value 0.005981445 ?
+             # mz.step <- min(diff(pl[,1])) # may be fixed value 0.005981445 ?
+             diff_freq <- table(diff(pl[,1]))
+             mz.step <- as.numeric(names(which.max(diff_freq)))
              xout <- seq(mz.min, mz.max, by=mz.step)
              pl.resampled <- approx(pl[,1], pl[,2], xout=xout)
              mat.resampled <- matrix(nrow=length(xout), 
@@ -336,7 +400,9 @@ setMethod("generateSummedSpectrum", "PeptideFit",
              for(i in seq_len(length(.Object@FWHM.MS1))){
 #                 pl <- peaks(.Object@mzRObj, .Object@FWHM.MS1[i])
 #                 initializeRamp(mzRObj)
-                pl <- peaks(mzRObj, .Object@FWHM.MS1[i])
+                ms1Idx <- which(header(mzRObj)$acquisitionNum == .Object@FWHM.MS1[i])
+                pl <- peaks(mzRObj, ms1Idx)
+                # pl <- peaks(mzRObj, .Object@FWHM.MS1[i])
 #                 close(mzRObj)
                 pl <- pl[(pl[,1] >= mz.min) & (pl[,1] <= mz.max),]
                 # impute zeros from beginning and the end
@@ -504,18 +570,22 @@ setMethod("getMassErrorPPM", "PeptideFit",
 )
 
 
+# old way
 setMethod("plot3D", "PeptideFit",
 #           definition=function(.Object, window=NULL)  # .Object@mzRObj
-          definition=function(.Object, mzRObj, window=NULL)
+          definition=function(.Object, mzRObj, mz.pad=0.25, scan.pad=0, resMz=0.1, window=NULL)
           {
-             mz.pad = 0.25
-             scan.pad = 0 # 0.25
+             # mz.pad = 0.25
+             # scan.pad = 0 # 0.25
              mzs <- range(.Object@summedMS1spectrum[,1])
-#              ms1 <- subset(header(.Object@mzRObj), msLevel == 1, 
+#              ms1 <- subset(header(.Object@mzRObj), msLevel == 1,
 #                            select=c(seqNum))[,1]
 #              initializeRamp(mzRObj)
-             ms1 <- subset(header(mzRObj), msLevel == 1, 
-                           select=c(seqNum))[,1]
+
+             # 2017-03-09 change. making mzML robust
+             # ms1 <- subset(header(mzRObj), msLevel == 1, select=c(seqNum))[,1]
+             ms1 <- subset(header(mzRObj), msLevel == 1, select=c(acquisitionNum))[,1]
+
 #              close(mzRObj)
              center.idx <- which(.Object@centerMS1 == ms1)
              if(is.null(window))
@@ -528,15 +598,15 @@ setMethod("plot3D", "PeptideFit",
              i00 <- i00[ i00 > 0]
              i00 <- i00[ i00 < length(ms1)]
              scans <- ms1[i00]
-             resMz = 0.1
-             
+             # resMz = 0.1
+
              # get3Dmap prints 1. Should be silences somehow.
-#              im <- get3Dmap( .Object@mzRObj, scans, 
-#                              min(mzs)-diff(mzs)*mz.pad, 
+#              im <- get3Dmap( .Object@mzRObj, scans,
+#                              min(mzs)-diff(mzs)*mz.pad,
 #                              max(mzs)+diff(mzs)*mz.pad, resMz=resMz)
 #              initializeRamp(mzRObj)
-             im <- get3Dmap( mzRObj, scans, 
-                             min(mzs)-diff(mzs)*mz.pad, 
+             im <- get3Dmap( mzRObj, scans = which(header(mzRObj)$acquisitionNum %in% scans),
+                             min(mzs)-diff(mzs)*mz.pad,
                              max(mzs)+diff(mzs)*mz.pad, resMz=resMz)
 #              close(mzRObj)
 
@@ -554,43 +624,46 @@ setMethod("plot3D", "PeptideFit",
              cut.val <- quantile(imm,0.67) # top 2/3
              im[im < cut.val] <- cut.val # move to arguments
              image(im, col=col, axes=FALSE,
-                   xlab='scan', ylab='m/z', 
+                   xlab='scan', ylab='m/z',
                    main='LC-MS 3D View')
-             axis(1, at=0:6/6, 
+
+             # axes labels
+             axis(1, at=0:6/6,
                   labels=scans[round(length(scans)*1:7/7)])
-             axis(4, at=0:6/6, 
-                  labels=sprintf("%.2f", 
+             axis(4, at=0:6/6,
+                  labels=sprintf("%.2f",
                                  seq(min(.Object@theor.mz),
                                      max(.Object@theor.mz),
                                      length=7)),
                   las=2)
              box()
              #
-             closest.to.mz <- 
+
+             closest.to.mz <-
                 (.Object@experimentalMassToCharge-(min(mzs)-diff(mzs)*mz.pad))/
                      ((1+2*mz.pad)*diff(range(mzs)))
-             closest.to.ms2Scan <- 
+             closest.to.ms2Scan <-
                 (.Object@ms2Scan-min(scans))/
                   diff(range(scans))
              points( closest.to.ms2Scan,
-                     rep(closest.to.mz, length(closest.to.ms2Scan)), 
+                     rep(closest.to.mz, length(closest.to.ms2Scan)),
                      col='red', pch=4)
              #
              # plot box for summed spectrum
              mz.range <- range(.Object@summedMS1spectrum[,1])
              scan.range <- range(.Object@FWHM.MS1)
-             min.mz <- 
+             min.mz <-
                 (min(.Object@summedMS1spectrum[,1])-
                     (min(mzs)-diff(mzs)*mz.pad))/
                 ((1+2*mz.pad)*diff(range(mzs)))
-             max.mz <- 
+             max.mz <-
                 (max(.Object@summedMS1spectrum[,1])-
                     (min(mzs)-diff(mzs)*mz.pad))/
                 ((1+2*mz.pad)*diff(range(mzs)))
-             min.scan <- 
+             min.scan <-
                 (min(.Object@FWHM.MS1)-min(scans))/
                 diff(range(scans))
-             max.scan <- 
+             max.scan <-
                 (max(.Object@FWHM.MS1)-min(scans))/
                 diff(range(scans))
              rect(min.scan, min.mz, max.scan, max.mz, lty=1)
@@ -599,9 +672,121 @@ setMethod("plot3D", "PeptideFit",
 )
 
 
+
+
+
+
+
+
+
+
+
+
+# # new way
+# setMethod("plot3D", "PeptideFit",
+#           #           definition=function(.Object, window=NULL)  # .Object@mzRObj
+#           definition=function(.Object, mzRObj, mz.pad=0.25, scan.pad=0, resMz=0.1, N=7, window=NULL, ...)
+#           {
+#               # mz.pad and scan.pad are in added fold increased.
+#               # e.g. +1 means 2-fold increase
+#               
+#               # 2017-03-09 change. making mzML robust
+#               # ms1 <- subset(header(mzRObj), msLevel == 1, select=c(seqNum))[,1]
+#               ms1 <- subset(header(mzRObj), msLevel == 1, select=c(acquisitionNum))[,1]
+#               center.idx <- which(.Object@centerMS1 == ms1)
+#               if(is.null(window))
+#                   window <- .Object@scanConsiderationRange
+#               i0 <- which.min(abs(ms1 - median(.Object@ms2Scan)))
+#               i00 <- i0 + (round(-.Object@scanConsiderationRange*(1+scan.pad))):
+#                   (round(+.Object@scanConsiderationRange*(1+scan.pad)))
+#               i00 <- i00[ i00 > 0]
+#               i00 <- i00[ i00 < length(ms1)]
+#               scans <- ms1[i00]
+# 
+#               
+#               # 3D map extraction
+#               mzs <- range(.Object@summedMS1spectrum[,1])
+#               lowMz  <- min(mzs)-diff(mzs)*mz.pad
+#               highMz <- min(mzs)+diff(mzs)*mz.pad
+#               im <- get3Dmap( mzRObj, scans = which(header(mzRObj)$acquisitionNum %in% scans), 
+#                               lowMz = lowMz, 
+#                               highMz = highMz, 
+#                               resMz=resMz)
+#               # need to trim mz values out the range and recompute the mz range
+#               sum.int <- colSums(im)
+#               idx.min <- ifelse(head(sum.int,1) != 0, 
+#                                 1,
+#                                 min(which(sum.int != 0)))
+#               idx.max <- ifelse(tail(sum.int,1) != 0, 
+#                                 length(sum.int),
+#                                 max(which(sum.int != 0)))
+#               # somehow the ncol(im) is +1 relatively to seq(lowMz,highMz,resMz),
+#               # so I need to pad the range.  This is kind of a hack for now
+#               # until I figure out what is going on in get3Dmap
+#               mz.vals <- seq(lowMz, highMz+resMz, by=resMz) 
+#               lowMz <- mz.vals[idx.min]
+#               highMz <- mz.vals[idx.max]
+#               im <- im[,idx.min:idx.max]
+# 
+#               
+#               op <- par(mar=c(5,4,4,6))
+#               col <- terrain.colors(256)
+#               im <- log10(im)
+#               imm <- im[!is.infinite(im)]
+#               # cut.val <- quantile(imm,0.67) # top 2/3 of intensities
+#               cut.val <- quantile(imm,0.75) # top 3/4 of intensities
+#               im[im < cut.val] <- cut.val # move to arguments
+#               image(im, col=col, axes=FALSE,
+#                     xlab='scan', ylab='m/z', 
+#                     main='LC-MS 3D View', ...)
+#               
+#               # axes labels
+#               # N = 13 # 7 is good setting
+#               axis(1, at=0:(N-1)/(N-1), 
+#                    labels=scans[round(length(scans)*(1:N)/N)], ...)
+#               axis(4, at=0:(N-1)/(N-1), 
+#                    labels=sprintf("%.2f", seq(lowMz, highMz, length=N)), ...)
+#               box()
+#               #
+#               
+#               # mapping mz to indices
+#               closest.to.mz <- (.Object@experimentalMassToCharge-lowMz)/(highMz-lowMz)
+#               closest.to.ms2Scan <- (.Object@ms2Scan-min(scans))/diff(range(scans))
+#               points( closest.to.ms2Scan,
+#                       rep(closest.to.mz, length(closest.to.ms2Scan)), 
+#                       col='red', pch=4)
+#               #
+#               # plot box for summed spectrum
+#               mz.range <- range(.Object@summedMS1spectrum[,1])
+#               scan.range <- range(.Object@FWHM.MS1)
+#               min.mz <- 
+#                   (min(.Object@summedMS1spectrum[,1])-lowMz)/(highMz-lowMz)
+#               max.mz <- 
+#                   (max(.Object@summedMS1spectrum[,1])-lowMz)/(highMz-lowMz)
+#               min.scan <- 
+#                   (min(.Object@FWHM.MS1)-min(scans))/
+#                   diff(range(scans))
+#               max.scan <- 
+#                   (max(.Object@FWHM.MS1)-min(scans))/
+#                   diff(range(scans))
+#               rect(min.scan, min.mz, max.scan, max.mz, lty=1)
+#               par(op)
+#           }
+# )
+
+
+
+
+
+
+
+
+
+
+
 setMethod("reportToPNG", "PeptideFit",
 #           definition=function(.Object)
-          definition=function(.Object, mzRObj)
+          definition=function(.Object, mzRObj, ...)
           {
              filename <- sprintf("%s_z%s.png",
                                     .Object@peptideSequence,
@@ -610,8 +795,7 @@ setMethod("reportToPNG", "PeptideFit",
              op <- par(mfcol=c(2,2))
              plotIsoFit(.Object)
              plotEIC(.Object)
-#              plot3D(.Object)
-             plot3D(.Object, mzRObj)
+             plot3D(.Object, mzRObj, ...)
              par(op)
              dev.off()
           }
@@ -711,13 +895,22 @@ getEICforMz <- function( x, ms2.scan, pep.mz,
                          scanRange=c(-20,+20),
                          massTolPpm=10){
    ms1.header = subset(header(x), msLevel == 1)
-   i0 <- which.min(abs(ms1.header$seqNum - ms2.scan))
+   
+   # 2017-03-09 change. making mzML robust
+   # i0 <- which.min(abs(ms1.header$seqNum - ms2.scan))
+   i0 <- which.min(abs(ms1.header$acquisitionNum - ms2.scan)) # row number in header
+   
    tol.mz <- pep.mz * massTolPpm / 1e6
    scans <- numeric()
    sum.ints <- numeric()
    for(ii in scanRange[1]:scanRange[2]){
-      scan.i <- ms1.header[i0 + ii,'seqNum']
-      pp <- peaks(x, scan.i)
+      
+       # 2017-03-09 change. making mzML robust 
+      # scan.i <- ms1.header[i0 + ii,'seqNum']
+      scan.i <- ms1.header[i0 + ii,'acquisitionNum']
+      idx_for_peaks <- rownames(ms1.header)[i0 + ii]
+      
+      pp <- peaks(x, scan = as.numeric(idx_for_peaks))
       pp <- pp[pp[,1] > pep.mz - tol.mz & pp[,1] < (pep.mz + tol.mz),
                ,drop=FALSE]
       sum.i <- sum(pp[,2])
@@ -730,7 +923,7 @@ getEICforMz <- function( x, ms2.scan, pep.mz,
 
 
 centroiding <- function( spectrum, ppm.tol=25, mad.threshold=4)
-   # centroids continuous spectrum
+   # centroids profile spectrum
 {
    # preprocess
    spectrum <- subset( spectrum, spectrum[,2] > 0) # no zero intensity values
